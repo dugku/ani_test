@@ -5,12 +5,13 @@ import polars as pl
 from translate_scale import translate_scale
 from dataclasses import dataclass, field
 from typing import List, Tuple, Dict, Optional
+from pathlib import Path
 
 
 @dataclass
-class Praser:
+class Parser:
     dem = Demo
-    file: str
+    file: Path
     map_name: Optional[str] = ""
 
     def parse_demo(self):
@@ -21,23 +22,32 @@ class Praser:
         self.map_name = header["map_name"]
 
     def filter_ticks(self):
-        rounds = self.dem.rounds.select(
-            pl.col("round_num").count()
-        ).item()
-
+        round_ids = (
+            self.dem.rounds
+            .select("round_num")
+            .unique()
+            .sort("round_num")
+            ["round_num"]
+            .to_list()
+        )
         r = []
 
-        for i in tqdm(range(rounds)):
-            for tick in self.dem.ticks.filter(pl.col("round_num") == i + 1)["tick"].unique().to_list()[::10]:
-                round_df = self.dem.ticks.filter(pl.col("tick") == tick)
-                s_tick = self.dem.rounds.filter(pl.col("round_num") == i + 1)["start"].item()
-                offical_end = self.dem.rounds.filter(pl.col("round_num") == i + 1)["official_end"].item()
+        for i in tqdm(round_ids):
+            round_meta = self.dem.rounds.filter(pl.col("round_num") == i).select(
+                "start", "official_end"
+            ).row(0)
 
-                r_state = RoundState(roundNum=i + 1, startTick=s_tick, endTick=offical_end, tick_df=round_df)
+            samp_tick = self.dem.ticks.filter(
+                (pl.col("round_num") == i) &
+                (pl.col("tick") >= round_meta[0]) &
+                (pl.col("tick") <= round_meta[1])
+            ).sort("tick")
 
-                r.append(r_state)
+            round = RoundState(roundNum=i, startTick=round_meta[0], endTick=round_meta[1], tick_df=samp_tick)
 
-        return rounds
+            r.append(round)
+
+        return r
 
 
 @dataclass
@@ -74,14 +84,6 @@ class RoundState:
 @dataclass
 class Frames:
     pass
-
-
-def parse(filename):
-    dem = Demo(filename)
-    dem.parse(player_props=["health", "armor_value", "pitch", "yaw"])
-
-    return dem
-
 
 def filter_ticks(dem):
     frames = []
