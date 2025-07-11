@@ -34,7 +34,7 @@ class Parser:
 
         for i in tqdm(round_ids):
             round_meta = self.dem.rounds.filter(pl.col("round_num") == i).select(
-                "start", "official_end"
+                "freeze_end", "official_end"
             ).row(0)
 
             samp_tick = self.dem.ticks.filter(
@@ -80,16 +80,11 @@ class RoundState:
 
     _players: Dict[int, pl.DataFrame] = field(default_factory=dict)
 
-
-@dataclass
-class Frames:
-    pass
-
-def filter_ticks(dem):
+def frame_gen(round_num, tick_df):
     frames = []
-
-    for tick in tqdm(dem.ticks.filter(pl.col("round_num") == 1)["tick"].unique().to_list()[::128]):
-        frame_df = dem.ticks.filter(pl.col("tick") == tick)
+    print("Frames")
+    for tick in tqdm(tick_df.filter(pl.col("round_num") == round_num)["tick"].unique().to_list()[::2]):
+        frame_df = tick_df.filter(pl.col("tick") == tick)
         frame_df = frame_df[
             ["X", "Y", "Z", "health", "armor", "pitch", "yaw", "side", "name"]
         ]
@@ -121,6 +116,5 @@ def filter_ticks(dem):
             "points": points,
             "style": point_settings
         })
-    print(type(frames))
     return frames
         

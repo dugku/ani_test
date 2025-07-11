@@ -4,7 +4,6 @@ import imageio.v3 as iio
 from tqdm import tqdm
 
 def plot_frames(frames):
-
     filenames = []
     count = 0
 
@@ -46,7 +45,7 @@ def plot_frames(frames):
     make_gif(tqdm(filenames))
 
 def make_gif(filenames):
-    writer = imageio.get_writer('test.mp4', fps=20)
+    writer = imageio.get_writer('test.mp4', fps=30)
     for im_path in filenames:  # Sort to ensure correct frame order
         im = iio.imread(im_path)
         writer.append_data(im)
