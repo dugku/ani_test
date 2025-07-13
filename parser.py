@@ -10,20 +10,19 @@ from pathlib import Path
 
 @dataclass
 class Parser:
-    dem = Demo
+    demo = Demo
     file: Path
-    map_name: Optional[str] = ""
+    map_name: Optional[str] = field(init=False, default=None)
 
     def parse_demo(self):
-        self.dem = Demo(self.file)
-        self.dem.parse(player_props=["health", "armor_value", "pitch", "yaw"])
-        header = self.dem.parse_header()
-
+        self.demo = Demo(self.file)
+        self.demo.parse(player_props=["health", "armor_value", "pitch", "yaw"])
+        header = self.demo.parse_header()
         self.map_name = header["map_name"]
 
     def filter_ticks(self):
         round_ids = (
-            self.dem.rounds
+            self.demo.rounds
             .select("round_num")
             .unique()
             .sort("round_num")
@@ -33,11 +32,11 @@ class Parser:
         r = []
 
         for i in tqdm(round_ids):
-            round_meta = self.dem.rounds.filter(pl.col("round_num") == i).select(
+            round_meta = self.demo.rounds.filter(pl.col("round_num") == i).select(
                 "freeze_end", "official_end"
             ).row(0)
 
-            samp_tick = self.dem.ticks.filter(
+            samp_tick = self.demo.ticks.filter(
                 (pl.col("round_num") == i) &
                 (pl.col("tick") >= round_meta[0]) &
                 (pl.col("tick") <= round_meta[1])

@@ -10,62 +10,53 @@ from shapely.geometry import Polygon, MultiPolygon, GeometryCollection
 
 
 def plot_map():
-    img = plt.imread(r"de_inferno_radar_psd.png")
+    img = plt.imread(r"radar_images/de_inferno_radar_psd.png")
     h, w = img.shape[:2]
 
     fig, ax = plt.subplots(figsize=(4, 10))
     ax.imshow(img, extent=[0, w, 0, h])
 
 
-def make_polygon():
-    path = r"C:\Users\micha\Desktop\animation_test\de_inferno_radar_psd.png"
-    img_rgba = cv2.imread(path, cv2.IMREAD_UNCHANGED)
+def make_polygon(img_p):
+    img = cv2.imread(img_p, cv2.IMREAD_UNCHANGED)
+    alpha = img[..., 3]
+    mask_a = alpha > 0
 
-    alpha = img_rgba[..., 3]
-    mask = alpha > 0
-
-    img_rgb = img_rgba[..., :3].copy()
-    img_rgb[~mask] = (255, 255, 255)
-
-    gray = cv2.cvtColor(img_rgb, cv2.COLOR_BGR2GRAY)
-    _, bw = cv2.threshold(gray,  # try thresh ~ 60–80 for Inferno
-                          70,  # tweak!  lower values -> more floor
-                          255,
-                          cv2.THRESH_BINARY_INV)
-
-    bw[~mask] = 0
-
-    kernel = np.ones((5, 5), np.uint8)
-    clean = cv2.morphologyEx(bw, cv2.MORPH_CLOSE, kernel, iterations=2)
-
-    contours, hierarchy = cv2.findContours(
-        clean,
-        cv2.RETR_CCOMP,  # <-- get a 2-level hierarchy
-        cv2.CHAIN_APPROX_SIMPLE
+    num, labels, stats, _ = cv2.connectedComponentsWithStats(
+        alpha.astype(np.uint8), connectivity=8
     )
-    hierarchy = hierarchy[0]
+
+    if num <= 1:
+        raise RuntimeError("No painted pixels!")
+    biggest = 1 + np.argmax(stats[1:, cv2.CC_STAT_AREA])
+
+    floor_mask = (labels == biggest).astype(np.uint8) * 255
+
+    clean = cv2.morphologyEx(floor_mask, cv2.MORPH_CLOSE,
+                             kernel=np.ones((5, 5), np.uint8), iterations=2)
+
+    contours, hier = cv2.findContours(clean, cv2.RETR_CCOMP,
+                                      cv2.CHAIN_APPROX_SIMPLE)
+    hier = hier[0]
 
     polys = []
     for idx, cnt in enumerate(contours):
-        parent = hierarchy[idx][3]
-        if parent != -1:
+        if hier[idx][3] != -1:
             continue
-
+        cnt = cnt.squeeze()
+        if cnt.shape[0] < 4:
+            continue
         holes = []
-        child = hierarchy[idx][2]  # firstChild
+        child = hier[idx][2]
         while child != -1:
-            hole_cnt = contours[child].squeeze()
-            if cv2.contourArea(hole_cnt) > 1_000:  # filter tiny specks
-                holes.append(hole_cnt)
-            child = hierarchy[child][0]  # next sibling
+            h = contours[child].squeeze()
+            if h.shape[0] >= 4:
+                holes.append(h)
+            child = hier[child][0]
+        polys.append(Polygon(cnt, holes))
 
-        polys.append(
-            Polygon(cnt.squeeze(), [h for h in holes])  # exterior, list-of-holes
-        )
 
-    floor_poly = unary_union(polys).buffer(0)
-
-    return floor_poly
+    return unary_union(polys).buffer(0)
 
 
 def random_points(polygon, num_points):
@@ -87,7 +78,7 @@ def iter_polys(g):
             yield from iter_polys(sub)
 
 
-floor_poly = make_polygon()
+"""floor_poly = make_polygon()
 
 num_points_to_generate = 55
 random_pts = random_points(floor_poly, num_points_to_generate)
@@ -99,7 +90,7 @@ clipped_cells = [cell.intersection(floor_poly)
                  for cell in voro.geoms
                  if not cell.is_empty]
 
-img = plt.imread(r"de_inferno_radar_psd.png")
+img = plt.imread(r"radar_images/de_inferno_radar_psd.png")
 h, w = img.shape[:2]
 fig, ax = plt.subplots(figsize=(4, 10))
 ax.imshow(img, extent=[0, w, 0, h], origin="lower")
@@ -117,4 +108,4 @@ ax.set_aspect("equal")
 ax.invert_yaxis()
 
 plt.tight_layout()
-plt.show()
+plt.show()"""
